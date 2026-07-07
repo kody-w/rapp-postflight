@@ -79,7 +79,14 @@ Write-Host "  Running the installer (output -> $LOG)..."
 $T0 = Get-Date
 $installJob = Start-Job -ScriptBlock {
     param($url, $log)
-    try { Invoke-WebRequest -UseBasicParsing -Uri $url | Select-Object -ExpandProperty Content | Invoke-Expression *>> $log }
+    try {
+        # GitHub Pages serves .ps1 as application/octet-stream, so .Content is a
+        # byte[] there (raw.githubusercontent gives a string). Decode either shape,
+        # and strip a UTF-8 BOM if present — iex chokes on a leading U+FEFF.
+        $content = (Invoke-WebRequest -UseBasicParsing -Uri $url).Content
+        if ($content -is [byte[]]) { $content = [System.Text.Encoding]::UTF8.GetString($content) }
+        Invoke-Expression $content.TrimStart([char]0xFEFF) *>> $log
+    }
     catch { $_ | Out-File -Append $log }
 } -ArgumentList $INSTALL_URL, $LOG
 
