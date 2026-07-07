@@ -85,7 +85,17 @@ fi
 echo ""
 echo "  Running the one-liner (output → $LOG)..."
 T0=$(date +%s)
-curl -fsSL "$INSTALL_URL" | bash >"$LOG" 2>&1 </dev/null &
+# Download the installer to a file, then run it with stdin closed. Piping
+# curl straight into `bash ... </dev/null` would override bash's stdin (the
+# script pipe!) with /dev/null — bash reads an empty script and exits, and
+# the install silently never happens.
+INSTALLER_TMP=$(mktemp -t rapp-installer)
+if ! curl -fsSL "$INSTALL_URL" -o "$INSTALLER_TMP"; then
+    check_fail "Could not fetch the installer from $INSTALL_URL"
+    echo -e "${RED} NO-GO — installer unreachable${NC}"
+    exit 1
+fi
+bash "$INSTALLER_TMP" >"$LOG" 2>&1 </dev/null &
 INSTALL_PID=$!
 
 # ── Step 4: wait for health ───────────────────────────────────────────────────
