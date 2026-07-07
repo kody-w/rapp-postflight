@@ -138,20 +138,30 @@ if ($healthy) {
     Get-NetTCPConnection -LocalPort $PORT -State Listen -ErrorAction SilentlyContinue |
         ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
     Start-Sleep -Seconds 2
+    # install.ps1 creates no venv on Windows — it pip-installs into the user's
+    # Python and runs the system interpreter. Prefer the venv if one ever
+    # appears (Mac-layout parity), else launch the way the installer does.
     $venvPy = "$BRAINSTEM_HOME\venv\Scripts\python.exe"
-    Start-Process -FilePath $venvPy -ArgumentList "brainstem.py" `
-        -WorkingDirectory "$BRAINSTEM_HOME\src\rapp_brainstem" -WindowStyle Hidden `
-        -RedirectStandardOutput "$LOG.restart.out" -RedirectStandardError "$LOG.restart.err"
-    $R0 = Get-Date; $bound = $false
-    while (((Get-Date) - $R0).TotalSeconds -le $RESTART_BIND_LIMIT) {
-        try {
-            Invoke-WebRequest -UseBasicParsing -Uri $HEALTH_URL -TimeoutSec 1 | Out-Null
-            $bound = $true; break
-        } catch { Start-Sleep -Milliseconds 500 }
+    if (-not (Test-Path $venvPy)) {
+        $venvPy = (Get-Command python -ErrorAction SilentlyContinue).Source
     }
-    $T_BIND = [int]((Get-Date) - $R0).TotalSeconds
-    if ($bound) { CheckPass "Restart accepts connections in ${T_BIND}s (limit ${RESTART_BIND_LIMIT}s)" }
-    else { CheckFail "Restart did NOT accept connections within ${RESTART_BIND_LIMIT}s (issue #14 class)" }
+    if (-not $venvPy) {
+        CheckFail "Restart gate: no python found (no venv, none on PATH)"
+    } else {
+        Start-Process -FilePath $venvPy -ArgumentList "brainstem.py" `
+            -WorkingDirectory "$BRAINSTEM_HOME\src\rapp_brainstem" -WindowStyle Hidden `
+            -RedirectStandardOutput "$LOG.restart.out" -RedirectStandardError "$LOG.restart.err"
+        $R0 = Get-Date; $bound = $false
+        while (((Get-Date) - $R0).TotalSeconds -le $RESTART_BIND_LIMIT) {
+            try {
+                Invoke-WebRequest -UseBasicParsing -Uri $HEALTH_URL -TimeoutSec 1 | Out-Null
+                $bound = $true; break
+            } catch { Start-Sleep -Milliseconds 500 }
+        }
+        $T_BIND = [int]((Get-Date) - $R0).TotalSeconds
+        if ($bound) { CheckPass "Restart accepts connections in ${T_BIND}s (limit ${RESTART_BIND_LIMIT}s)" }
+        else { CheckFail "Restart did NOT accept connections within ${RESTART_BIND_LIMIT}s (issue #14 class)" }
+    }
 }
 
 # -- Verdict ------------------------------------------------------------------------
