@@ -1,4 +1,4 @@
-# rollback.ps1 — roll kody-w/rapp-installer main back to the PRIOR version.
+﻿# rollback.ps1 — roll kody-w/rapp-installer main back to the PRIOR version.
 # Windows mirror of rollback.sh: finds the most recent commit on main whose
 # rapp_brainstem/VERSION differs from HEAD, restores that full tree as a NEW
 # commit (no history rewrite, no force-push), and pushes to main.

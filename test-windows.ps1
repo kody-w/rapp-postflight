@@ -1,4 +1,4 @@
-# test-windows.ps1 — the post-deploy gate (Windows). Strips the global
+﻿# test-windows.ps1 — the post-deploy gate (Windows). Strips the global
 # brainstem, runs the PUBLIC installer exactly as a first-time user would,
 # and verifies the result. On any failed check it rolls the rapp-installer
 # repo back to the prior version (disable with -NoRollback).

@@ -1,4 +1,4 @@
-# reset-windows.ps1 — completely strip the global RAPP brainstem from this
+﻿# reset-windows.ps1 — completely strip the global RAPP brainstem from this
 # machine so the public one-liner can be tested as a true fresh install.
 #
 # Mirrors reset-mac.sh:
@@ -124,3 +124,7 @@ OK "Reset complete — machine is ready for a fresh-install test"
 Write-Host "   Run the installer:  iwr -useb https://kody-w.github.io/rapp-installer/install.ps1 | iex"
 Write-Host "   Or the full test:   .\test-windows.ps1"
 Write-Host ""
+# robocopy exits 1 on "files copied successfully" (0-7 are all success), which
+# would leak through $LASTEXITCODE and make test-windows.ps1 read a clean reset
+# as a failure. Exit 0 explicitly.
+exit 0
