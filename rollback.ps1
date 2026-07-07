@@ -27,7 +27,14 @@ try {
 
     $curVer = (Get-Content "rapp_brainstem\VERSION" -Raw).Trim()
     $target = $null; $prevVer = $null
-    foreach ($c in (git rev-list main -- rapp_brainstem/VERSION)) {
+    # Walk the FULL first-parent history (not just VERSION-touching commits):
+    # the restore point is main as it stood immediately before the current
+    # version landed. Path-filtering skipped inter-release commits and a
+    # rollback once silently discarded PR #18's docs/install.ps1 (grail #24).
+    # Skip prior "rollback:" commits too — their trees are synthetic snapshots.
+    foreach ($c in (git rev-list --first-parent main)) {
+        $subject = (git log -1 --format=%s $c | Out-String).Trim()
+        if ($subject -like "rollback:*") { continue }
         $v = (git show "${c}:rapp_brainstem/VERSION" 2>$null | Out-String).Trim()
         if ($v -and $v -ne $curVer) { $target = $c; $prevVer = $v; break }
     }

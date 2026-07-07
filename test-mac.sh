@@ -140,15 +140,23 @@ if [ "$HEALTHY" = true ]; then
     fi
 
     # ── Check: Copilot auth (only meaningful when auth was kept) ─────────────
+    # Retry loop, NOT single-shot: a probe can time out while the server blocks
+    # on its initial token exchange, and this check gates a production rollback.
+    # A single flaky probe already rolled back a good deploy twice (grail #24).
     if [ -f "$TOKEN_STASH" ]; then
-        copilot_state=$("$VENV_PY" -c "
+        copilot_state=""
+        for _ in $(seq 1 6); do
+            copilot_state=$("$VENV_PY" -c "
 import json, urllib.request
 h = json.load(urllib.request.urlopen('$HEALTH_URL', timeout=5))
 print(h.get('copilot',''))" 2>/dev/null)
+            [ "$copilot_state" = "✓" ] && break
+            sleep 10
+        done
         if [ "$copilot_state" = "✓" ]; then
             check_pass "Copilot authenticated (health reports ✓)"
         else
-            check_fail "Copilot not authenticated (health reports '$copilot_state')"
+            check_fail "Copilot not authenticated after 6 probes over ~60s (last: '$copilot_state')"
         fi
     fi
 

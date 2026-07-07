@@ -35,7 +35,14 @@ cd "$WORK/repo"
 cur_ver=$(tr -d '[:space:]' < rapp_brainstem/VERSION)
 target=""
 prev_ver=""
-for c in $(git rev-list main -- rapp_brainstem/VERSION); do
+# Walk the FULL first-parent history (not just VERSION-touching commits): the
+# restore point is main as it stood immediately before the current version
+# landed. Filtering by the VERSION path skipped inter-release commits and a
+# rollback once silently discarded PR #18's docs/install.ps1 (grail #24).
+# Skip prior "rollback:" commits too — their trees are synthetic snapshots
+# (possibly themselves missing inter-release work), not real main-line states.
+for c in $(git rev-list --first-parent main); do
+    case "$(git log -1 --format=%s "$c")" in rollback:*) continue ;; esac
     v=$(git show "$c:rapp_brainstem/VERSION" 2>/dev/null | tr -d '[:space:]')
     if [ -n "$v" ] && [ "$v" != "$cur_ver" ]; then
         target="$c"
