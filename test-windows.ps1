@@ -125,12 +125,23 @@ if ($healthy) {
     } catch { CheckFail "Version check failed: $_" }
 
     # -- Check: Copilot auth --------------------------------------------------------
+    # Retry: a single 5s probe rolled back a good v0.6.6 deploy when the server
+    # was busy with its initial Copilot token exchange (rapp-installer#24). Every
+    # other gate here polls — this one must too. Up to 6 attempts over ~60s,
+    # and distinguish "unreachable" from "reachable but unauthenticated".
     if (Test-Path $TOKEN_STASH) {
-        try {
-            $health = Invoke-RestMethod -Uri $HEALTH_URL -TimeoutSec 5
-            if ("$($health.copilot)" -match "u2713|✓") { CheckPass "Copilot authenticated (health reports OK)" }
-            else { CheckFail "Copilot not authenticated (health reports '$($health.copilot)')" }
-        } catch { CheckFail "Copilot auth check failed: $_" }
+        $authOk = $false; $copilotVal = $null
+        for ($attempt = 1; $attempt -le 6; $attempt++) {
+            try {
+                $health = Invoke-RestMethod -Uri $HEALTH_URL -TimeoutSec 5
+                $copilotVal = "$($health.copilot)"
+                if ($copilotVal -match "u2713|✓") { $authOk = $true; break }
+            } catch { }
+            Start-Sleep -Seconds 5
+        }
+        if ($authOk) { CheckPass "Copilot authenticated (health reports OK)" }
+        elseif ($null -ne $copilotVal) { CheckFail "Copilot not authenticated (health reports '$copilotVal')" }
+        else { CheckFail "Copilot auth check failed: /health unreachable across 6 attempts" }
     }
 
     # -- Check: RESTART GATE (issue #14 regression) --------------------------------
