@@ -185,6 +185,29 @@ if [ ${#FAIL[@]} -eq 0 ]; then
     echo -e "${GREEN} GO — ${#PASS[@]}/${#PASS[@]} checks passed${NC}"
     echo -e "${GREEN}══════════════════════════════════════════${NC}"
     echo "  Server left running at http://localhost:$PORT"
+
+    # ── Golden gate (warn-only) ───────────────────────────────────────────────
+    # After infrastructure goes GO, exercise actual chat behavior with the
+    # rapp-bench goldens. WARN-ONLY by design: LLM output is nondeterministic
+    # and the rollback trigger has a false-positive history (grail #24) — a
+    # flaky golden must never roll back a healthy deploy.
+    echo ""
+    echo "  Golden gate (rapp-bench, warn-only)..."
+    BENCH_DIR="$HOME/rapp-bench"
+    if [ ! -d "$BENCH_DIR" ]; then
+        gh repo clone kody-w/rapp-bench "$BENCH_DIR" -- --quiet 2>/dev/null || git clone -q https://github.com/kody-w/rapp-bench "$BENCH_DIR" 2>/dev/null || true
+    else
+        git -C "$BENCH_DIR" pull -q 2>/dev/null || true
+    fi
+    if [ -f "$BENCH_DIR/golden.py" ]; then
+        if "$VENV_PY" "$BENCH_DIR/golden.py"; then
+            echo -e "  ${GREEN}✓${NC} Goldens passed — chat behavior verified"
+        else
+            echo -e "  ${YELLOW}⚠${NC} GOLDEN WARNINGS — deploy stays (infra GO), but chat behavior regressed; investigate before demoing"
+        fi
+    else
+        echo -e "  ${YELLOW}⚠${NC} rapp-bench unavailable — goldens skipped"
+    fi
     exit 0
 fi
 

@@ -71,4 +71,13 @@ echo -e "  ${GREEN}✓${NC} main rolled back to v$prev_ver ($(git rev-parse --sh
 echo -e "  ${YELLOW}⚠${NC} CDN note: kody-w.github.io + raw.githubusercontent cache for 5-10 min;"
 echo "     the one-liner serves v$prev_ver after the cache expires. Verify with:"
 echo "     curl -fsSL https://raw.githubusercontent.com/$REPO/main/rapp_brainstem/VERSION"
+
+# Observability: a production rollback must never be discoverable only by
+# reading git history. File a grail issue automatically (best-effort — an
+# issue failure must not fail the rollback itself).
+gh issue create -R "$REPO" \
+    --title "⏪ AUTO-ROLLBACK: v$cur_ver -> v$prev_ver ($(date -u +%Y-%m-%dT%H:%MZ))" \
+    --body "$(printf 'Post-deploy tests failed on %s and main was automatically rolled back.\n\n- **From:** v%s\n- **To:** v%s (restore target: %s)\n- **Machine:** %s (%s)\n\nNext steps: check the postflight log on the machine that ran the gate, decide whether the deploy was actually bad or the harness misfired (see #24 for the false-positive history), and either fix-forward or reroll with a `reroll:` commit restoring the newer tree.' "$(hostname)" "$cur_ver" "$prev_ver" "$(git rev-parse --short "$target")" "$(hostname)" "$(uname -s)")" \
+    >/dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} Rollback issue filed on $REPO" \
+    || echo -e "  ${YELLOW}⚠${NC} Could not file the rollback issue — announce the rollback manually"
 echo ""

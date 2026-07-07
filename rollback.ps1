@@ -57,6 +57,22 @@ try {
 
     Write-Host "  [OK] main rolled back to v$prevVer" -ForegroundColor Green
     Write-Host "  [!] CDN note: the one-liner serves v$prevVer after cache expiry (5-10 min)." -ForegroundColor Yellow
+
+    # Observability: a production rollback must never be discoverable only by
+    # reading git history. File a grail issue automatically (best-effort).
+    $stamp = Get-Date -Format "yyyy-MM-ddTHH:mmZ" -AsUTC
+    $body = @"
+Post-deploy tests failed on $env:COMPUTERNAME and main was automatically rolled back.
+
+- **From:** v$curVer
+- **To:** v$prevVer (restore target: $($target.Substring(0,8)))
+- **Machine:** $env:COMPUTERNAME (Windows)
+
+Next steps: check the postflight log on the machine that ran the gate, decide whether the deploy was actually bad or the harness misfired (see #24 for the false-positive history), and either fix-forward or reroll with a ``reroll:`` commit restoring the newer tree.
+"@
+    gh issue create -R $REPO --title "[AUTO-ROLLBACK] v$curVer -> v$prevVer ($stamp)" --body $body *> $null
+    if ($LASTEXITCODE -eq 0) { Write-Host "  [OK] Rollback issue filed on $REPO" -ForegroundColor Green }
+    else { Write-Host "  [!] Could not file the rollback issue — announce the rollback manually" -ForegroundColor Yellow }
 } finally {
     Set-Location $env:TEMP
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
