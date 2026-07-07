@@ -103,19 +103,50 @@ if (Get-NetTCPConnection -LocalPort $PORT -State Listen -ErrorAction SilentlyCon
 # -- 6. Optional full factory ---------------------------------------------------
 if ($FullFactory) {
     Write-Host ""
-    Write-Host "  FULL FACTORY MODE — uninstalls Git, Python 3.11, and GitHub CLI" -ForegroundColor Red
+    Write-Host "  FULL FACTORY MODE — uninstalls Git, Python, and GitHub CLI" -ForegroundColor Red
     Write-Host "  via winget. Other tools on this machine depend on these."
     if (-not $Yes) {
         $answer = Read-Host "  Type 'factory' to proceed"
         if ($answer -ne "factory") { Fail "Aborted full-factory removal" }
     }
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Warn "winget not found — cannot remove prerequisites; skipping"
+        Fail "winget not found — cannot deliver a factory strip; rerun without -FullFactory"
+    }
+
+    # gh.exe in use makes its own uninstall fail (issue #28 gap 3) — kill first.
+    Get-Process gh -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+    # Strip EVERY winget-known Python, not just 3.11 (issue #28 gap 2): any
+    # leftover gets adopted by the installer and silently bypasses the
+    # install-Python-from-zero path.
+    $pkgs = @("GitHub.cli", "Git.Git")
+    $pkgs += (winget list --id Python.Python --accept-source-agreements 2>$null |
+        Select-String -Pattern 'Python\.Python\.[\d.]+' -AllMatches |
+        ForEach-Object { $_.Matches.Value } | Select-Object -Unique)
+    foreach ($pkg in $pkgs) {
+        winget uninstall --id $pkg --silent --accept-source-agreements 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) { OK "Uninstalled $pkg" } else { Warn "$pkg not installed or could not be removed" }
+    }
+
+    # VERIFY the strip (issue #28 gap 1): factory mode must not report success
+    # while the bootstrap paths it exists to prove are still bypassed.
+    # A hard requirement for git/gh; Python gets a PARTIAL verdict because
+    # out-of-scope interpreters (Store shims, pyenv-win, custom C:\PythonXX)
+    # are a legitimate machine state the installer is allowed to adopt.
+    $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
+                [Environment]::GetEnvironmentVariable('Path','User')
+    foreach ($cmd in @('git', 'gh')) {
+        $found = Get-Command $cmd -ErrorAction SilentlyContinue
+        if ($found) { Fail "FACTORY STRIP INCOMPLETE: $cmd still resolves ($($found.Source)) — uninstall it manually, then rerun" }
+        OK "$cmd gone from PATH"
+    }
+    $pyLeft = Get-Command python, python3 -ErrorAction SilentlyContinue |
+        Where-Object { $_.Source -notlike '*WindowsApps*' }   # store shims aren't real installs
+    if ($pyLeft) {
+        Warn "PARTIAL FACTORY: Python still present outside winget's scope — the installer will adopt it instead of proving install-from-zero:"
+        $pyLeft | ForEach-Object { Warn "    $($_.Source)" }
     } else {
-        foreach ($pkg in @("GitHub.cli", "Python.Python.3.11", "Git.Git")) {
-            winget uninstall --id $pkg --silent --accept-source-agreements 2>$null | Out-Null
-            if ($LASTEXITCODE -eq 0) { OK "Uninstalled $pkg" } else { Warn "$pkg not installed or could not be removed" }
-        }
+        OK "No real Python on PATH — install-from-zero path will be exercised"
     }
 }
 

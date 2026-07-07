@@ -123,20 +123,34 @@ if [ "$FULL_FACTORY" = true ]; then
         [ "$answer" = "factory" ] || die "Aborted full-factory removal"
     fi
     if ! command -v brew >/dev/null 2>&1; then
-        warn "Homebrew not found — cannot remove prerequisites; skipping"
-    else
-        for pkg in gh python@3.11 git; do
-            if brew list "$pkg" >/dev/null 2>&1; then
-                brew uninstall --quiet "$pkg" && ok "Uninstalled $pkg" || warn "Could not uninstall $pkg"
-            else
-                ok "$pkg not installed via brew"
-            fi
-        done
-        hash -r
-        command -v gh >/dev/null 2>&1 && warn "gh still on PATH: $(command -v gh)" || ok "gh gone from PATH"
-        command -v python3.11 >/dev/null 2>&1 && warn "python3.11 still on PATH: $(command -v python3.11)" || ok "python3.11 gone from PATH"
-        command -v git >/dev/null 2>&1 && warn "git still on PATH (likely Xcode CLT): $(command -v git)" || ok "git gone from PATH"
+        die "Homebrew not found — cannot deliver a factory strip; rerun without --full-factory"
     fi
+    for pkg in gh python@3.11 git; do
+        if brew list "$pkg" >/dev/null 2>&1; then
+            brew uninstall --quiet "$pkg" && ok "Uninstalled $pkg" || warn "Could not uninstall $pkg"
+        else
+            ok "$pkg not installed via brew"
+        fi
+    done
+    hash -r
+    # VERIFY the strip (issue #28): factory mode must not report success while
+    # the bootstrap paths it exists to prove are still bypassed. gh is a hard
+    # requirement (brew-owned, must be gone). python3.11 likewise when it came
+    # from brew. git is a PARTIAL verdict: Apple's Xcode CLT git cannot be
+    # removed this way, and the installer is allowed to adopt it.
+    if command -v gh >/dev/null 2>&1; then
+        die "FACTORY STRIP INCOMPLETE: gh still resolves ($(command -v gh)) — remove it manually, then rerun"
+    fi
+    ok "gh gone from PATH"
+    if command -v python3.11 >/dev/null 2>&1; then
+        case "$(command -v python3.11)" in
+            /opt/homebrew/*|/usr/local/*) die "FACTORY STRIP INCOMPLETE: brew python3.11 still resolves ($(command -v python3.11))" ;;
+            *) warn "PARTIAL FACTORY: non-brew python3.11 present ($(command -v python3.11)) — installer will adopt it instead of proving install-from-zero" ;;
+        esac
+    else
+        ok "python3.11 gone from PATH — install-from-zero path will be exercised"
+    fi
+    command -v git >/dev/null 2>&1 && warn "PARTIAL FACTORY: git still on PATH ($(command -v git), likely Xcode CLT — not removable via brew)" || ok "git gone from PATH"
 fi
 
 echo ""
