@@ -1,5 +1,9 @@
 # rapp-postflight
 
+<!-- rapp1:network-header:start -->
+[![RAPP/1](https://kody-w.github.io/rapp-hive-public/portfolio/badges/rapp-postflight.svg)](https://github.com/kody-w/rapp-hive-public/blob/main/portfolio/repos/rapp-postflight.md) · **New to RAPP?** [Start here: get your Brainstem →](https://github.com/kody-w/rapp-installer#start-here)
+<!-- rapp1:network-header:end -->
+
 Post-deploy tests for [rapp-installer](https://github.com/kody-w/rapp-installer).
 This repo houses **only** these scripts — nothing else belongs here.
 
